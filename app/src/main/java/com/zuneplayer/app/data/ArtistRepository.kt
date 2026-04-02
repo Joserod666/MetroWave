@@ -11,6 +11,7 @@ class ArtistRepository {
     companion object {
         private const val AUDIODB_API = "https://theaudiodb.com/api/v1/json/2/search.php"
         private const val WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+        private const val DEEZER_API = "https://api.deezer.com/search/artist&q="
     }
 
     suspend fun getArtistInfo(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
@@ -32,13 +33,54 @@ class ArtistRepository {
                 val imageUrl = artistJson.optString("strArtistThumb").takeIf { it.isNotEmpty() && it != "null" }
                     ?: artistJson.optString("strArtistThumbHQ").takeIf { it.isNotEmpty() && it != "null" }
                 
-                Result.success(
-                    ArtistInfo(
-                        name = name,
-                        imageUrl = imageUrl,
-                        bio = bio
+                if (imageUrl != null) {
+                    Result.success(
+                        ArtistInfo(
+                            name = name,
+                            imageUrl = imageUrl,
+                            bio = bio
+                        )
                     )
-                )
+                } else {
+                    getDeezerFallback(artistName, bio)
+                }
+            } else {
+                getDeezerFallback(artistName, null)
+            }
+        } catch (e: Exception) {
+            getDeezerFallback(artistName, null)
+        }
+    }
+
+    private suspend fun getDeezerFallback(artistName: String, existingBio: String?): Result<ArtistInfo> = withContext(Dispatchers.IO) {
+        try {
+            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+            val deezerUrl = "$DEEZER_API$encodedArtist"
+            
+            val response = URL(deezerUrl).readText()
+            val json = JSONObject(response)
+            
+            val data = json.optJSONArray("data")
+            if (data != null && data.length() > 0) {
+                val artistJson = data.getJSONObject(0)
+                val imageUrl = artistJson.optString("picture_xl")
+                    .takeIf { it.isNotEmpty() && it != "null" }
+                    ?: artistJson.optString("picture_big")
+                    .takeIf { it.isNotEmpty() && it != "null" }
+                    ?: artistJson.optString("picture_medium")
+                    .takeIf { it.isNotEmpty() && it != "null" }
+                
+                if (imageUrl != null) {
+                    Result.success(
+                        ArtistInfo(
+                            name = artistJson.optString("name", artistName),
+                            imageUrl = imageUrl,
+                            bio = existingBio ?: getWikipediaBio(artistName)
+                        )
+                    )
+                } else {
+                    getWikipediaFallback(artistName)
+                }
             } else {
                 getWikipediaFallback(artistName)
             }
