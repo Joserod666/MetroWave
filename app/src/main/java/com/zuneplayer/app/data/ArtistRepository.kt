@@ -1,0 +1,86 @@
+package com.zuneplayer.app.data
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.URL
+import java.net.URLEncoder
+
+class ArtistRepository {
+
+    companion object {
+        private const val AUDIODB_API = "https://theaudiodb.com/api/v1/json/2/search.php"
+        private const val WIKIPEDIA_API = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+    }
+
+    suspend fun getArtistInfo(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
+        try {
+            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+            val audioDbUrl = "$AUDIODB_API?s=$encodedArtist"
+            
+            val response = URL(audioDbUrl).readText()
+            val json = JSONObject(response)
+            
+            val artists = json.optJSONArray("artists")
+            if (artists != null && artists.length() > 0) {
+                val artistJson = artists.getJSONObject(0)
+                
+                val name = artistJson.optString("strArtist", artistName)
+                val bio = artistJson.optString("strBiographyEN").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: getWikipediaBio(artistName)
+                
+                val imageUrl = artistJson.optString("strArtistThumb").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: artistJson.optString("strArtistThumbHQ").takeIf { it.isNotEmpty() && it != "null" }
+                
+                Result.success(
+                    ArtistInfo(
+                        name = name,
+                        imageUrl = imageUrl,
+                        bio = bio
+                    )
+                )
+            } else {
+                getWikipediaFallback(artistName)
+            }
+        } catch (e: Exception) {
+            getWikipediaFallback(artistName)
+        }
+    }
+
+    private suspend fun getWikipediaBio(artistName: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+            val url = "$WIKIPEDIA_API$encodedArtist"
+            val response = URL(url).readText()
+            val json = JSONObject(response)
+            if (json.has("extract")) json.getString("extract") else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private suspend fun getWikipediaFallback(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
+        try {
+            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+            val url = "$WIKIPEDIA_API$encodedArtist"
+            
+            val response = URL(url).readText()
+            val json = JSONObject(response)
+            
+            val name = json.optString("title", artistName)
+            val description = if (json.has("extract")) json.optString("extract") else null
+            val imageUrl = json.optJSONObject("originalimage")?.optString("source")
+                ?: json.optJSONObject("thumbnail")?.optString("source")
+            
+            Result.success(
+                ArtistInfo(
+                    name = name,
+                    imageUrl = imageUrl,
+                    bio = description
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+}

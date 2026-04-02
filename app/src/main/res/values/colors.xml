@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="zune_black">#FF000000</color>
+    <color name="zune_dark_gray">#FF1A1A1A</color>
+    <color name="zune_medium_gray">#FF2D2D2D</color>
+    <color name="zune_light_gray">#FF888888</color>
+    <color name="zune_magenta">#FFF0529D</color>
+    <color name="zune_white">#FFFFFFFF</color>
+    <color name="zune_accent">#FFFF0080</color>
+</resources>
