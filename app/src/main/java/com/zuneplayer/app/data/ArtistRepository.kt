@@ -32,27 +32,26 @@ class ArtistRepository {
                 
                 val imageUrl = artistJson.optString("strArtistThumb").takeIf { it.isNotEmpty() && it != "null" }
                     ?: artistJson.optString("strArtistThumbHQ").takeIf { it.isNotEmpty() && it != "null" }
+                    ?: artistJson.optString("strArtistWideThumb").takeIf { it.isNotEmpty() && it != "null" }
                 
                 if (imageUrl != null) {
-                    Result.success(
+                    return@withContext Result.success(
                         ArtistInfo(
                             name = name,
                             imageUrl = imageUrl,
                             bio = bio
                         )
                     )
-                } else {
-                    getDeezerFallback(artistName, bio)
                 }
-            } else {
-                getDeezerFallback(artistName, null)
             }
+            
+            getDeezerWithFallback(artistName)
         } catch (e: Exception) {
-            getDeezerFallback(artistName, null)
+            getDeezerWithFallback(artistName)
         }
     }
 
-    private suspend fun getDeezerFallback(artistName: String, existingBio: String?): Result<ArtistInfo> = withContext(Dispatchers.IO) {
+    private suspend fun getDeezerWithFallback(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
         try {
             val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
             val deezerUrl = "$DEEZER_API$encodedArtist"
@@ -71,37 +70,23 @@ class ArtistRepository {
                     .takeIf { it.isNotEmpty() && it != "null" }
                 
                 if (imageUrl != null) {
-                    Result.success(
+                    return@withContext Result.success(
                         ArtistInfo(
                             name = artistJson.optString("name", artistName),
                             imageUrl = imageUrl,
-                            bio = existingBio ?: getWikipediaBio(artistName)
+                            bio = getWikipediaBio(artistName)
                         )
                     )
-                } else {
-                    getWikipediaFallback(artistName)
                 }
-            } else {
-                getWikipediaFallback(artistName)
             }
+            
+            getWikipediaWithFallback(artistName)
         } catch (e: Exception) {
-            getWikipediaFallback(artistName)
+            getWikipediaWithFallback(artistName)
         }
     }
 
-    private suspend fun getWikipediaBio(artistName: String): String? = withContext(Dispatchers.IO) {
-        try {
-            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
-            val url = "$WIKIPEDIA_API$encodedArtist"
-            val response = URL(url).readText()
-            val json = JSONObject(response)
-            if (json.has("extract")) json.getString("extract") else null
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    private suspend fun getWikipediaFallback(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
+    private suspend fun getWikipediaWithFallback(artistName: String): Result<ArtistInfo> = withContext(Dispatchers.IO) {
         try {
             val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
             val url = "$WIKIPEDIA_API$encodedArtist"
@@ -122,7 +107,25 @@ class ArtistRepository {
                 )
             )
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.success(
+                ArtistInfo(
+                    name = artistName,
+                    imageUrl = null,
+                    bio = null
+                )
+            )
+        }
+    }
+
+    private suspend fun getWikipediaBio(artistName: String): String? = withContext(Dispatchers.IO) {
+        try {
+            val encodedArtist = URLEncoder.encode(artistName, "UTF-8")
+            val url = "$WIKIPEDIA_API$encodedArtist"
+            val response = URL(url).readText()
+            val json = JSONObject(response)
+            if (json.has("extract")) json.getString("extract") else null
+        } catch (e: Exception) {
+            null
         }
     }
 }

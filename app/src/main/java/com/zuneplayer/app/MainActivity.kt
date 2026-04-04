@@ -113,6 +113,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+    }
     
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
